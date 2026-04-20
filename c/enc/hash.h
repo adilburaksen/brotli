@@ -29,6 +29,11 @@ extern "C" {
 #endif
 
 typedef struct {
+  size_t start_literal_pos;
+  size_t length;
+} Base64Region;
+
+typedef struct {
   /**
    * Dynamically allocated areas; regular hasher uses one or two allocations;
    * "composite" hasher uses up to 4 allocations.
@@ -52,6 +57,9 @@ typedef struct {
    * data initialization (using input ringbuffer).
    */
   BROTLI_BOOL is_prepared_;
+
+  Base64Region base64_regions[16];
+  size_t num_base64_regions;
 } HasherCommon;
 
 #define score_t size_t
