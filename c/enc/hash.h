@@ -465,6 +465,27 @@ static BROTLI_INLINE void HasherSetup(MemoryManager* m, Hasher* hasher,
       if (BROTLI_IS_OOM(m) || BROTLI_IS_NULL(hasher->common.extra[i])) return;
     }
     if (params->base64_mode && params->max_base64_regions > 0) {
+      /* `BROTLI_ALLOC` computes `N * sizeof(T)` with no overflow check; if
+         `max_base64_regions` is close to `SIZE_MAX / sizeof(Base64Region)`
+         (reachable via the public, unvalidated
+         `BROTLI_PARAM_MAX_BASE64_REGIONS` parameter -- e.g. 1u << 29 on a
+         32-bit build, where sizeof(Base64Region) == 8), the multiplication
+         wraps and yields a buffer far smaller than the
+         `num_base64_regions < params->max_base64_regions` guards below
+         assume, producing a heap buffer overflow on the first detected
+         Base64 region. Clamp to the largest count that cannot overflow the
+         allocation size; every downstream read of `max_base64_regions`
+         goes through this same `params` pointer, so this keeps the
+         allocation size and every write-guard consistent. Values above the
+         clamp already have no realistic chance of a successful allocation
+         (it would require multiple gigabytes), so this changes no correct,
+         reachable behavior -- it only turns silent memory corruption into
+         the existing, already-handled BROTLI_IS_OOM/IS_NULL failure path. */
+      size_t max_safe_base64_regions =
+          ((size_t)-1) / sizeof(Base64Region);
+      if (params->max_base64_regions > max_safe_base64_regions) {
+        params->max_base64_regions = max_safe_base64_regions;
+      }
       hasher->common.base64_regions = BROTLI_ALLOC(
           m, Base64Region, params->max_base64_regions);
       if (BROTLI_IS_OOM(m) || BROTLI_IS_NULL(hasher->common.base64_regions)) {
